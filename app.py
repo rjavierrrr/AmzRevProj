@@ -42,7 +42,7 @@ if uploaded_file and rf_model and tfidf:
             X_new = tfidf.transform(data['reviews.text'].fillna(""))
             predictions = rf_model.predict(X_new)
 
-            # Resumir los resultados
+            # Mapear las predicciones
             sentiment_mapping = {0: "Negative", 1: "Neutral", 2: "Positive"}
             data['Predicted Sentiment'] = [sentiment_mapping[label] for label in predictions]
 
@@ -51,12 +51,13 @@ if uploaded_file and rf_model and tfidf:
             y_pred = data['Predicted Sentiment']
 
             cm = confusion_matrix(y_true, y_pred, labels=["Negative", "Neutral", "Positive"])
-            disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=["Negative", "Neutral", "Positive"])
 
-            # Mostrar la matriz de confusión
+            # Mostrar la matriz de confusión como gráfico
             st.write("### Confusion Matrix")
-            fig, ax = plt.subplots(figsize=(8, 6))
-            disp.plot(ax=ax, cmap="Blues")
+            fig, ax = plt.subplots(figsize=(6, 6))
+            disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=["Negative", "Neutral", "Positive"])
+            disp.plot(ax=ax, cmap="Blues", colorbar=False)
+            plt.title("Confusion Matrix")
             st.pyplot(fig)
 
             # Mostrar la tabla resumen
