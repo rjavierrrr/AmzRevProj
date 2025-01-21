@@ -1,73 +1,58 @@
 import streamlit as st
 import pandas as pd
 import pickle
-import os
 
-# Streamlit page configuration
-st.set_page_config(page_title="Sentiment Analysis", layout="wide")
+# Configuración inicial de la página
+st.set_page_config(page_title="Customer Reviews Sentiment Analysis", layout="wide")
 
-# Function to load the model
-def load_model():
-    model_path = "original_rf_model.pkl"
-
-    # Check if the file exists
-    if not os.path.exists(model_path):
-        raise FileNotFoundError(f"The model file {model_path} does not exist.")
-
-    # Check if the file is not empty
-    if os.path.getsize(model_path) == 0:
-        raise ValueError(f"The model file {model_path} is empty.")
-
-    # Attempt to load the model
-    try:
-        with open(model_path, "rb") as file:
-            model = pickle.load(file)
-        return model
-    except Exception as e:
-        raise RuntimeError(f"Failed to load model: {e}")
-
-# Attempt to load the model
-try:
-    model = load_model()
-    st.success("Model loaded successfully!")
-except Exception as e:
-    st.error(f"Error loading the model: {e}")
-    model = None
-
-# Streamlit app layout
-st.sidebar.title("Sentiment Analysis Tool")
-st.sidebar.write("Upload a CSV file with customer reviews to classify them as Negative, Neutral, or Positive.")
-
+# Título de la aplicación
 st.title("Customer Reviews Sentiment Analysis")
 
-# File uploader for the CSV file
-uploaded_file = st.file_uploader("Upload a CSV file with customer reviews", type=["csv"])
+# Paso 1: Cargar el modelo manualmente
+st.write("### Step 1: Upload your Model File (.pkl)")
+uploaded_model = st.file_uploader("Upload your model file", type=["pkl"], key="model_file")
+
+model = None
+if uploaded_model:
+    try:
+        # Intentar cargar el modelo
+        model = pickle.load(uploaded_model)
+        st.success("Model loaded successfully!")
+    except Exception as e:
+        st.error(f"Error loading the model: {e}")
+else:
+    st.warning("Please upload your model file to proceed.")
+
+# Paso 2: Cargar un archivo CSV
+st.write("### Step 2: Upload your CSV File with Reviews")
+uploaded_file = st.file_uploader("Upload a CSV file with customer reviews", type=["csv"], key="csv_file")
 
 if uploaded_file and model:
     try:
-        # Load and display the CSV file
+        # Leer el archivo CSV
         data = pd.read_csv(uploaded_file)
         st.write("### Uploaded Data Preview")
         st.dataframe(data.head())
 
-        # Specify the review column
+        # Especificar la columna que contiene las reseñas
         review_column = st.text_input("Enter the column name containing the reviews:", value="review")
 
         if review_column not in data.columns:
             st.error(f"Column '{review_column}' not found in the uploaded file. Please check the column name.")
         else:
-            # Process and predict sentiments
+            # Predecir sentimientos
             reviews = data[review_column].fillna("")
             predictions = model.predict(reviews)
 
-            # Map predictions to labels
-            sentiment_map = {0: "Negative", 1: "Neutral", 2: "Positive"}  # Adjust based on your model's output
+            # Mapear los resultados a etiquetas de sentimiento
+            sentiment_map = {0: "Negative", 1: "Neutral", 2: "Positive"}  # Ajusta según la salida de tu modelo
             data["Sentiment"] = [sentiment_map[pred] for pred in predictions]
 
+            # Mostrar los resultados
             st.write("### Sentiment Analysis Results")
             st.dataframe(data[[review_column, "Sentiment"]])
 
-            # Downloadable CSV
+            # Botón para descargar los resultados
             csv = data.to_csv(index=False).encode("utf-8")
             st.download_button(
                 label="Download Results as CSV",
