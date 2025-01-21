@@ -1,4 +1,6 @@
-streamlit
 scikit-learn==1.6.0
+joblib==1.1.0
+streamlit
 pandas
 matplotlib
+gdown
