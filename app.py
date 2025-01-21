@@ -42,8 +42,15 @@ if uploaded_file and rf_model and tfidf:
             sentiment_mapping = {0: "Negative", 1: "Neutral", 2: "Positive"}
             data['Predicted Sentiment'] = [sentiment_mapping[label] for label in predictions]
 
-            # Mostrar resultados
-            st.write("### Predicted Results")
+            # Resumir los resultados
+            sentiment_summary = data['Predicted Sentiment'].value_counts().rename_axis('Sentiment').reset_index(name='Count')
+
+            # Mostrar la tabla resumen
+            st.write("### Summary of Sentiment Analysis")
+            st.table(sentiment_summary)
+
+            # Mostrar las predicciones detalladas
+            st.write("### Detailed Predictions")
             st.dataframe(data[['reviews.text', 'Predicted Sentiment']])
 
             # Descargar los resultados
