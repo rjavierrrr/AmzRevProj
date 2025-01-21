@@ -1,6 +1,6 @@
-scikit-learn==1.6.0
-joblib==1.1.0
 streamlit
+scikit-learn==1.6.0
 pandas
+joblib>=1.2.0
 matplotlib
 gdown
