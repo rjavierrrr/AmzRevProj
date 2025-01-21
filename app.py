@@ -1,8 +1,6 @@
 import streamlit as st
 import pandas as pd
 import joblib
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
-import matplotlib.pyplot as plt
 
 # Configuración inicial de la página
 st.set_page_config(page_title="Sentiment Analysis with TF-IDF", layout="wide")
@@ -35,8 +33,6 @@ if uploaded_file and rf_model and tfidf:
         
         if 'reviews.text' not in data.columns:
             st.error("The CSV file must have a 'reviews.text' column for the reviews.")
-        elif 'true_labels' not in data.columns:
-            st.error("The CSV file must have a 'true_labels' column with the actual sentiment labels.")
         else:
             # Preprocesar y predecir
             X_new = tfidf.transform(data['reviews.text'].fillna(""))
@@ -46,25 +42,16 @@ if uploaded_file and rf_model and tfidf:
             sentiment_mapping = {0: "Negative", 1: "Neutral", 2: "Positive"}
             data['Predicted Sentiment'] = [sentiment_mapping[label] for label in predictions]
 
-            # Crear la matriz de confusión
-            y_true = data['true_labels'].map(sentiment_mapping)
-            y_pred = data['Predicted Sentiment']
-
-            cm = confusion_matrix(y_true, y_pred, labels=["Negative", "Neutral", "Positive"])
-
-            # Mostrar la matriz de confusión como gráfico
-            st.write("### Confusion Matrix")
-            fig, ax = plt.subplots(figsize=(6, 6))
-            disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=["Negative", "Neutral", "Positive"])
-            disp.plot(ax=ax, cmap="Blues", colorbar=False)
-            plt.title("Confusion Matrix")
-            st.pyplot(fig)
+            # Resumir los resultados
+            sentiment_summary = data['Predicted Sentiment'].value_counts().rename_axis('Sentiment').reset_index(name='Count')
 
             # Mostrar la tabla resumen
-            sentiment_summary = data['Predicted Sentiment'].value_counts().reset_index()
-            sentiment_summary.columns = ['Sentiment', 'Count']
             st.write("### Summary of Sentiment Analysis")
             st.table(sentiment_summary)
+
+            # Mostrar las predicciones detalladas
+            st.write("### Detailed Predictions")
+            st.dataframe(data[['reviews.text', 'Predicted Sentiment']])
 
             # Descargar los resultados
             csv = data.to_csv(index=False).encode("utf-8")
