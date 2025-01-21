@@ -42,16 +42,17 @@ if uploaded_file and rf_model and tfidf:
             sentiment_mapping = {0: "Negative", 1: "Neutral", 2: "Positive"}
             data['Predicted Sentiment'] = [sentiment_mapping[label] for label in predictions]
 
-            # Resumir los resultados
-            sentiment_summary = data['Predicted Sentiment'].value_counts().rename_axis('Sentiment').reset_index(name='Count')
+            # Resumir los resultados y quitar índices
+            sentiment_summary = (
+                data['Predicted Sentiment']
+                .value_counts()
+                .reset_index()
+                .rename(columns={'index': 'Sentiment', 'Predicted Sentiment': 'Count'})
+            )
 
             # Mostrar la tabla resumen
             st.write("### Summary of Sentiment Analysis")
             st.table(sentiment_summary)
-
-            # Mostrar las predicciones detalladas
-            st.write("### Detailed Predictions")
-            st.dataframe(data[['reviews.text', 'Predicted Sentiment']])
 
             # Descargar los resultados
             csv = data.to_csv(index=False).encode("utf-8")
