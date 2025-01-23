@@ -1,42 +1,40 @@
+
 import streamlit as st
 import pandas as pd
 import joblib
-import gdown
-from transformers import pipeline
+from transformers import pipeline, AutoTokenizer, AutoModelForSeq2SeqLM
 
 # Configuración inicial de la página
 st.set_page_config(page_title="Sentiment Analysis and Summarization", layout="wide")
 
 st.title("Customer Reviews Sentiment Analysis and Summarization")
 
-# URLs del modelo y el vectorizador en Google Drive
-MODEL_URL = "https://drive.google.com/uc?id=1JL0zT9kb3lwb9Rz_jwZgmg_znZWQ43oD"
-TFIDF_URL = "https://drive.google.com/uc?id=1_3xaYyWWaUVaQYrXCaA2POhfIIgFx62k"
-
-# Función para descargar y cargar el modelo de análisis de sentimientos
+# Función para cargar el modelo de análisis de sentimientos y vectorizador
 @st.cache_resource
 def load_model_and_vectorizer():
-    model_output = "original_rf_model.pkl"
-    gdown.download(MODEL_URL, model_output, quiet=False)
-    rf_model = joblib.load(model_output)
+    rf_model_path = "https://drive.google.com/uc?id=1JL0zT9kb3lwb9Rz_jwZgmg_znZWQ43oD"
+    tfidf_vectorizer_path = "https://drive.google.com/uc?id=1_3xaYyWWaUVaQYrXCaA2POhfIIgFx62k"
 
-    vectorizer_output = "tfidf_vectorizer.pkl"
-    gdown.download(TFIDF_URL, vectorizer_output, quiet=False)
-    tfidf_vectorizer = joblib.load(vectorizer_output)
+
+    rf_model = joblib.load(rf_model_path)
+    tfidf_vectorizer = joblib.load(tfidf_vectorizer_path)
 
     return rf_model, tfidf_vectorizer
 
-# Función para cargar el modelo de resumen desde Hugging Face
+# Función para cargar el modelo de resumen desde un directorio
 @st.cache_resource
 def load_summarization_model():
-    summarizer = pipeline("summarization", model="google/flan-t5-base")
+    summarizer_model_path = "path/to/your/model/directory"  # Ruta del directorio del modelo de resumen
+    tokenizer = AutoTokenizer.from_pretrained(summarizer_model_path)
+    model = AutoModelForSeq2SeqLM.from_pretrained(summarizer_model_path)
+    summarizer = pipeline("summarization", model=model, tokenizer=tokenizer)
     return summarizer
 
 # Cargar los modelos
 try:
     rf_model, tfidf = load_model_and_vectorizer()
     summarizer = load_summarization_model()
-    st.success("Models loaded successfully!")
+    st.success("Models loaded successfully! (No training involved)")
 except Exception as e:
     st.error(f"Error loading models: {e}")
     st.stop()
@@ -74,8 +72,8 @@ if uploaded_file:
             st.write("### Summary of Sentiment Analysis")
             st.table(sentiment_summary)
 
-            # Seleccionar las 10 principales categorías
-            top_categories = data['categories'].value_counts().head(5).index
+            # Seleccionar las primeras 3 categorías
+            top_categories = data['categories'].unique()[:3]
             filtered_data = data[data['categories'].isin(top_categories)]
 
             # Agrupar reseñas por categoría y calificación
