@@ -2,30 +2,47 @@ import streamlit as st
 import pandas as pd
 import joblib
 import gdown
+import zipfile
 from transformers import T5Tokenizer, T5ForConditionalGeneration
 
 # Configuración inicial de la página
 st.set_page_config(page_title="Sentiment Analysis & Summarization", layout="wide")
 st.title("Customer Reviews Sentiment Analysis and Summarization")
 
-# URLs del modelo
+# URLs de los modelos en Google Drive
 MODEL_URL = "https://drive.google.com/uc?id=1JL0zT9kb3lwb9Rz_jwZgmg_znZWQ43oD"
 TFIDF_URL = "https://drive.google.com/uc?id=1_3xaYyWWaUVaQYrXCaA2POhfIIgFx62k"
+SUMMARIZATION_ZIP_URL = "https://drive.google.com/uc?id=1OlArb8SDWtSMdOvfMgEB1_a_6Z06I6fG"  # Reemplaza con el ID del archivo ZIP
 
-# Cargar el modelo de resumen
+# Descargar y cargar modelo y vectorizador
+@st.cache_resource
+def load_model_and_vectorizer():
+    # Descargar el modelo de Random Forest
+    model_output = "original_rf_model.pkl"
+    gdown.download(MODEL_URL, model_output, quiet=False)
+    rf_model = joblib.load(model_output)
+
+    # Descargar el vectorizador TF-IDF
+    vectorizer_output = "tfidf_vectorizer.pkl"
+    gdown.download(TFIDF_URL, vectorizer_output, quiet=False)
+    tfidf_vectorizer = joblib.load(vectorizer_output)
+
+    return rf_model, tfidf_vectorizer
+
+# Descargar y cargar modelo de resumen
 @st.cache_resource
 def load_summarization_model():
-    try:
-        # Load tokenizer and model from the local directory
-        tokenizer = T5Tokenizer.from_pretrained("/workspaces/AmzRevProj/flan_t5_summary_model")
-        model = T5ForConditionalGeneration.from_pretrained(
-            "/workspaces/AmzRevProj/flan_t5_summary_model", trust_remote_code=True
-        )
-        return tokenizer, model
-    except Exception as e:
-        st.error(f"Error loading summarization model: {e}")
-        st.stop()
+    # Descargar y descomprimir el modelo de resumen
+    summarization_zip = "flan_t5_summary_model.zip"
+    gdown.download(SUMMARIZATION_ZIP_URL, summarization_zip, quiet=False)
+    with zipfile.ZipFile(summarization_zip, "r") as zip_ref:
+        zip_ref.extractall("./")
 
+    tokenizer = T5Tokenizer.from_pretrained("./flan_t5_summary_model/flan_t5_summary_model")
+    model = T5ForConditionalGeneration.from_pretrained("./flan_t5_summary_model/flan_t5_summary_model")
+    return tokenizer, model
+
+# Función para resumir reseñas
 def summarize_review(tokenizer, model, review_text):
     inputs = tokenizer.encode("summarize: " + review_text, return_tensors="pt", max_length=512, truncation=True)
     summary_ids = model.generate(
@@ -38,19 +55,7 @@ def summarize_review(tokenizer, model, review_text):
     )
     return tokenizer.decode(summary_ids[0], skip_special_tokens=True)
 
-# Descargar y cargar modelo y vectorizador
-@st.cache_resource
-def load_model_and_vectorizer():
-    model_output = "original_rf_model.pkl"
-    gdown.download(MODEL_URL, model_output, quiet=False)
-    rf_model = joblib.load(model_output)
-
-    vectorizer_output = "tfidf_vectorizer.pkl"
-    gdown.download(TFIDF_URL, vectorizer_output, quiet=False)
-    tfidf_vectorizer = joblib.load(vectorizer_output)
-
-    return rf_model, tfidf_vectorizer
-
+# Cargar modelos
 rf_model, tfidf = load_model_and_vectorizer()
 tokenizer, summarization_model = load_summarization_model()
 
