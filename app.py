@@ -11,14 +11,18 @@ st.title("Customer Reviews Sentiment Analysis and Summarization")
 # URLs del modelo
 MODEL_URL = "https://drive.google.com/uc?id=1JL0zT9kb3lwb9Rz_jwZgmg_znZWQ43oD"
 TFIDF_URL = "https://drive.google.com/uc?id=1_3xaYyWWaUVaQYrXCaA2POhfIIgFx62k"
-SUMMARIZATION_MODEL_DIR = "./flan_t5_summary_model"
+SUMMARIZATION_MODEL_DIR = "/workspaces/AmzRevProj/flan_t5_summary_model"
 
 # Cargar el modelo de resumen
 @st.cache_resource
 def load_summarization_model():
-    tokenizer = T5Tokenizer.from_pretrained(SUMMARIZATION_MODEL_DIR)
-    model = T5ForConditionalGeneration.from_pretrained(SUMMARIZATION_MODEL_DIR)
-    return tokenizer, model
+    try:
+        tokenizer = T5Tokenizer.from_pretrained("google/flan-t5-base")
+        model = T5ForConditionalGeneration.from_pretrained("google/flan-t5-base")
+        return tokenizer, model
+    except Exception as e:
+        st.error(f"Error loading summarization model: {e}")
+        st.stop()
 
 # Función para resumir reseñas
 def summarize_review(tokenizer, model, review_text):
