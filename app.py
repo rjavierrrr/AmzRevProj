@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import joblib
 import gdown
-from transformers import pipeline, AutoModelForSeq2SeqLM, AutoTokenizer
+from transformers import pipeline
 
 # Configuración inicial de la página
 st.set_page_config(page_title="Sentiment Analysis and Summarization", layout="wide")
@@ -29,10 +29,7 @@ def load_model_and_vectorizer():
 # Función para cargar el modelo de resumen desde Hugging Face
 @st.cache_resource
 def load_summarization_model():
-    save_directory = "./flan_t5_summary_model"
-    model = AutoModelForSeq2SeqLM.from_pretrained(save_directory)
-    tokenizer = AutoTokenizer.from_pretrained(save_directory)
-    summarizer = pipeline("summarization", model=model, tokenizer=tokenizer)
+    summarizer = pipeline("summarization", model="google/flan-t5-base")
     return summarizer
 
 # Cargar los modelos
@@ -119,3 +116,4 @@ if uploaded_file:
         st.error(f"Error processing file: {e}")
 else:
     st.info("Please upload your CSV file to proceed.")
+
