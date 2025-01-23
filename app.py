@@ -8,7 +8,7 @@ import plotly.express as px
 # Configuración inicial de la página
 st.set_page_config(page_title="Sentiment Analysis and Summarization", layout="wide")
 
-st.title("Customer Reviews Sentiment Analysis and Summarization")
+st.title("Optimized Sentiment Analysis and Summarization")
 
 # URLs de los modelos en Google Drive
 MODEL_URL = "https://drive.google.com/uc?id=1JL0zT9kb3lwb9Rz_jwZgmg_znZWQ43oD"
@@ -27,10 +27,10 @@ def load_model_and_vectorizer():
 
     return rf_model, tfidf_vectorizer
 
-# Función para cargar el modelo de resumen
+# Función para cargar el modelo de resumen (usando un modelo ligero)
 @st.cache_resource
 def load_summarization_model():
-    summarizer = pipeline("summarization", model="google/flan-t5-base")
+    summarizer = pipeline("summarization", model="t5-small")  # Cambiado a un modelo más eficiente
     return summarizer
 
 # Cargar los modelos
@@ -47,8 +47,10 @@ uploaded_file = st.file_uploader("Upload a CSV file with reviews", type=["csv"])
 
 if uploaded_file:
     try:
-        # Leer el archivo CSV
+        # Leer y previsualizar el archivo CSV
         data = pd.read_csv(uploaded_file)
+        st.write("### Initial Data Overview")
+        st.dataframe(data)
 
         # Verificar columnas necesarias
         required_columns = {'categories', 'reviews.rating', 'reviews.text'}
@@ -60,24 +62,27 @@ if uploaded_file:
             data = data[data['reviews.text'].str.strip() != ""]
             data['reviews.rating'] = data['reviews.rating'].astype(int)
 
-            # Opción para seleccionar el filtro (categorías o calificaciones)
+            # Opción para filtrar por categoría o calificación
             filter_option = st.selectbox("Choose how to filter the reviews:", ["Categories", "Ratings"])
 
             if filter_option == "Categories":
-                # Dropdown para seleccionar categorías
+                # Dropdown para categorías
                 unique_categories = data['categories'].value_counts().index.tolist()
                 selected_category = st.selectbox("Select a category to analyze:", unique_categories)
-
-                # Filtrar los datos por categoría seleccionada
                 filtered_data = data[data['categories'] == selected_category]
-            
             elif filter_option == "Ratings":
-                # Dropdown para seleccionar calificaciones
+                # Dropdown para calificaciones
                 unique_ratings = sorted(data['reviews.rating'].unique())
                 selected_rating = st.selectbox("Select a rating to analyze:", unique_ratings)
-
-                # Filtrar los datos por calificación seleccionada
                 filtered_data = data[data['reviews.rating'] == selected_rating]
+
+            # Limitar la cantidad de reseñas por grupo (Top-N reseñas)
+            N = st.number_input("Limit the number of reviews per group:", min_value=1, max_value=100, value=20)
+            filtered_data = filtered_data.groupby(['categories', 'reviews.rating']).head(N)
+
+            # Mostrar los datos filtrados
+            st.write("### Filtered Data")
+            st.dataframe(filtered_data)
 
             # Preprocesar reseñas y realizar predicciones
             X_new = tfidf.transform(filtered_data['reviews.text'].fillna(""))
