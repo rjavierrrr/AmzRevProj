@@ -74,8 +74,8 @@ if uploaded_file:
             st.write("### Summary of Sentiment Analysis")
             st.table(sentiment_summary)
 
-            # Seleccionar las 50 principales categorías
-            top_categories = data['categories'].value_counts().nlargest(50).index
+            # Seleccionar las 10 principales categorías
+            top_categories = data['categories'].value_counts().nlargest(10).index
             filtered_data = data[data['categories'].isin(top_categories)]
 
             # Agrupar reseñas por categoría y calificación
