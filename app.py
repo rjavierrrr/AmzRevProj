@@ -2,18 +2,31 @@ import streamlit as st
 import pandas as pd
 import joblib
 import gdown
-from transformers import pipeline, AutoTokenizer, AutoModelForSeq2SeqLM
+from transformers import T5Tokenizer, T5ForConditionalGeneration
 
 # Configuración inicial de la página
-st.set_page_config(page_title="Sentiment Analysis and Summarization", layout="wide")
-
+st.set_page_config(page_title="Sentiment Analysis & Summarization", layout="wide")
 st.title("Customer Reviews Sentiment Analysis and Summarization")
 
-# URLs del modelo y el vectorizador en Google Drive
+# URLs del modelo
 MODEL_URL = "https://drive.google.com/uc?id=1JL0zT9kb3lwb9Rz_jwZgmg_znZWQ43oD"
 TFIDF_URL = "https://drive.google.com/uc?id=1_3xaYyWWaUVaQYrXCaA2POhfIIgFx62k"
+SUMMARIZATION_MODEL_DIR = "./flan_t5_summary_model"
 
-# Función para descargar y cargar el modelo de análisis de sentimientos
+# Cargar el modelo de resumen
+@st.cache_resource
+def load_summarization_model():
+    tokenizer = T5Tokenizer.from_pretrained(SUMMARIZATION_MODEL_DIR)
+    model = T5ForConditionalGeneration.from_pretrained(SUMMARIZATION_MODEL_DIR)
+    return tokenizer, model
+
+# Función para resumir reseñas
+def summarize_review(tokenizer, model, review_text):
+    inputs = tokenizer.encode("summarize: " + review_text, return_tensors="pt", max_length=512, truncation=True)
+    summary_ids = model.generate(inputs, max_length=150, min_length=40, length_penalty=2.0, num_beams=4, early_stopping=True)
+    return tokenizer.decode(summary_ids[0], skip_special_tokens=True)
+
+# Descargar y cargar modelo y vectorizador
 @st.cache_resource
 def load_model_and_vectorizer():
     model_output = "original_rf_model.pkl"
@@ -26,94 +39,57 @@ def load_model_and_vectorizer():
 
     return rf_model, tfidf_vectorizer
 
-# Función para cargar el modelo de resumen desde un directorio
-@st.cache_resource
-def load_summarization_model():
-    summarizer_model_path = "./flan_t5_summary_model"  # Ruta del directorio del modelo de resumen
-    tokenizer = AutoTokenizer.from_pretrained(summarizer_model_path)
-    model = AutoModelForSeq2SeqLM.from_pretrained(summarizer_model_path)
-    summarizer = pipeline("summarization", model=model, tokenizer=tokenizer)
-    return summarizer
+rf_model, tfidf = load_model_and_vectorizer()
+tokenizer, summarization_model = load_summarization_model()
 
-# Cargar los modelos
-try:
-    rf_model, tfidf = load_model_and_vectorizer()
-    summarizer = load_summarization_model()
-    st.success("Models loaded successfully! (No training involved)")
-except Exception as e:
-    st.error(f"Error loading models: {e}")
-    st.stop()
+st.success("Models loaded successfully.")
 
-# Cargar el archivo CSV
+# Carga del archivo CSV
 uploaded_file = st.file_uploader("Upload a CSV file with reviews", type=["csv"])
 
 if uploaded_file:
     try:
-        # Leer el archivo CSV
         data = pd.read_csv(uploaded_file)
 
-        if not {'categories', 'reviews.rating', 'reviews.text'}.issubset(data.columns):
-            st.error("The dataset must contain 'categories', 'reviews.rating', and 'reviews.text' columns.")
-        else:
-            # Preprocesar datos
-            data = data.dropna(subset=['categories', 'reviews.rating', 'reviews.text'])
-            data = data[data['reviews.text'].str.strip() != ""]
-            data['reviews.rating'] = data['reviews.rating'].astype(int)
+        if 'reviews.text' not in data.columns or 'reviews.rating' not in data.columns or 'product.category' not in data.columns:
+            st.error("The CSV must have 'reviews.text', 'reviews.rating', and 'product.category' columns.")
+            st.stop()
 
-            # Realizar análisis de sentimientos
-            X_new = tfidf.transform(data['reviews.text'].fillna(""))
-            predictions = rf_model.predict(X_new)
+        # Procesar y predecir sentimientos
+        data['reviews.text'] = data['reviews.text'].fillna("")
+        X_new = tfidf.transform(data['reviews.text'])
+        predictions = rf_model.predict(X_new)
 
-            sentiment_mapping = {0: "Negative", 1: "Neutral", 2: "Positive"}
-            data['Predicted Sentiment'] = [sentiment_mapping[label] for label in predictions]
+        sentiment_mapping = {0: "Negative", 1: "Neutral", 2: "Positive"}
+        data['Predicted Sentiment'] = [sentiment_mapping[label] for label in predictions]
 
-            # Resumir los resultados
-            sentiment_summary = (
-                data['Predicted Sentiment']
-                .value_counts()
-                .reset_index()
-                .rename(columns={'index': 'Sentiment', 'Predicted Sentiment': 'Count'})
-            )
-            st.write("### Summary of Sentiment Analysis")
-            st.table(sentiment_summary)
+        # Resumen por categorías y calificaciones
+        st.write("### Summarized Reviews by Category and Rating")
+        top_k_categories = st.slider("Select number of categories to summarize", min_value=1, max_value=50, value=10)
+        category_summary = []
 
-            # Seleccionar las primeras 3 categorías
-            top_categories = data['categories'].unique()[:3]
-            filtered_data = data[data['categories'].isin(top_categories)]
+        top_categories = data['product.category'].value_counts().head(top_k_categories).index
+        for category in top_categories:
+            st.write(f"#### Product Category: {category}")
+            category_data = data[data['product.category'] == category]
 
-            # Agrupar reseñas por categoría y calificación
-            grouped_reviews = (
-                filtered_data.groupby(['categories', 'reviews.rating'])['reviews.text']
-                .apply(lambda x: " ".join(x))
-                .reset_index()
-            )
+            for rating in range(1, 6):  # Rating 1 to 5
+                reviews = category_data[category_data['reviews.rating'] == rating]['reviews.text']
+                if not reviews.empty:
+                    combined_text = " ".join(reviews)
+                    summary = summarize_review(tokenizer, summarization_model, combined_text)
+                    st.write(f"**Rating {rating} Summary:** {summary}")
+                    category_summary.append({"Category": category, "Rating": rating, "Summary": summary})
 
-            # Generar resúmenes
-            st.write("### Generating Summaries for Each Category and Rating")
-
-            def summarize_reviews(text, max_length=512):
-                try:
-                    return summarizer(text, max_length=max_length, min_length=30, truncation=True)[0]['summary_text']
-                except Exception as e:
-                    return f"Error during summarization: {str(e)}"
-
-            grouped_reviews['Summary'] = grouped_reviews['reviews.text'].apply(summarize_reviews)
-            st.success("Summaries generated successfully!")
-
-            # Mostrar tabla de resúmenes
-            st.write("### Summarized Reviews")
-            st.dataframe(grouped_reviews[['categories', 'reviews.rating', 'Summary']])
-
-            # Descargar resultados
-            output_file = "summarized_reviews.csv"
-            grouped_reviews.to_csv(output_file, index=False)
-            st.download_button(
-                label="Download Summarized Reviews as CSV",
-                data=open(output_file, "rb").read(),
-                file_name=output_file,
-                mime="text/csv"
-            )
-
+        # Descargar resultados
+        summary_df = pd.DataFrame(category_summary)
+        csv = summary_df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            label="Download Summarization Results as CSV",
+            data=csv,
+            file_name="summarized_reviews.csv",
+            mime="text/csv"
+        )
     except Exception as e:
         st.error(f"Error processing file: {e}")
 else:
