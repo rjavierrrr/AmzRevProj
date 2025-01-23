@@ -2,15 +2,14 @@ import streamlit as st
 import pandas as pd
 import joblib
 import gdown
-from transformers import pipeline
-import plotly.express as px
+from transformers import pipeline, AutoModelForSeq2SeqLM, AutoTokenizer
 
 # Configuración inicial de la página
 st.set_page_config(page_title="Sentiment Analysis and Summarization", layout="wide")
 
-st.title("Optimized Sentiment Analysis and Summarization")
+st.title("Customer Reviews Sentiment Analysis and Summarization")
 
-# URLs de los modelos en Google Drive
+# URLs del modelo y el vectorizador en Google Drive
 MODEL_URL = "https://drive.google.com/uc?id=1JL0zT9kb3lwb9Rz_jwZgmg_znZWQ43oD"
 TFIDF_URL = "https://drive.google.com/uc?id=1_3xaYyWWaUVaQYrXCaA2POhfIIgFx62k"
 
@@ -27,10 +26,13 @@ def load_model_and_vectorizer():
 
     return rf_model, tfidf_vectorizer
 
-# Función para cargar el modelo de resumen (usando un modelo ligero)
+# Función para cargar el modelo de resumen desde Hugging Face
 @st.cache_resource
 def load_summarization_model():
-    summarizer = pipeline("summarization", model="t5-small")  # Cambiado a un modelo más eficiente
+    save_directory = "./flan_t5_summary_model"
+    model = AutoModelForSeq2SeqLM.from_pretrained(save_directory)
+    tokenizer = AutoTokenizer.from_pretrained(save_directory)
+    summarizer = pipeline("summarization", model=model, tokenizer=tokenizer)
     return summarizer
 
 # Cargar los modelos
@@ -42,83 +44,66 @@ except Exception as e:
     st.error(f"Error loading models: {e}")
     st.stop()
 
-# Carga del archivo CSV
+# Cargar el archivo CSV
 uploaded_file = st.file_uploader("Upload a CSV file with reviews", type=["csv"])
 
 if uploaded_file:
     try:
-        # Leer y previsualizar el archivo CSV
+        # Leer el archivo CSV
         data = pd.read_csv(uploaded_file)
-        st.write("### Initial Data Overview")
-        st.dataframe(data)
 
-        # Verificar columnas necesarias
-        required_columns = {'categories', 'reviews.rating', 'reviews.text'}
-        if not required_columns.issubset(data.columns):
-            st.error(f"The CSV file must contain the following columns: {required_columns}")
+        if not {'categories', 'reviews.rating', 'reviews.text'}.issubset(data.columns):
+            st.error("The dataset must contain 'categories', 'reviews.rating', and 'reviews.text' columns.")
         else:
-            # Preprocesar los datos
+            # Preprocesar datos
             data = data.dropna(subset=['categories', 'reviews.rating', 'reviews.text'])
             data = data[data['reviews.text'].str.strip() != ""]
             data['reviews.rating'] = data['reviews.rating'].astype(int)
 
-            # Opción para filtrar por categoría o calificación
-            filter_option = st.selectbox("Choose how to filter the reviews:", ["Categories", "Ratings"])
-
-            if filter_option == "Categories":
-                # Dropdown para categorías
-                unique_categories = data['categories'].value_counts().index.tolist()
-                selected_category = st.selectbox("Select a category to analyze:", unique_categories)
-                filtered_data = data[data['categories'] == selected_category]
-            elif filter_option == "Ratings":
-                # Dropdown para calificaciones
-                unique_ratings = sorted(data['reviews.rating'].unique())
-                selected_rating = st.selectbox("Select a rating to analyze:", unique_ratings)
-                filtered_data = data[data['reviews.rating'] == selected_rating]
-
-            # Limitar la cantidad de reseñas por grupo (Top-N reseñas)
-            N = st.number_input("Limit the number of reviews per group:", min_value=1, max_value=100, value=20)
-            filtered_data = filtered_data.groupby(['categories', 'reviews.rating']).head(N)
-
-            # Mostrar los datos filtrados
-            st.write("### Filtered Data")
-            st.dataframe(filtered_data)
-
-            # Preprocesar reseñas y realizar predicciones
-            X_new = tfidf.transform(filtered_data['reviews.text'].fillna(""))
+            # Realizar análisis de sentimientos
+            X_new = tfidf.transform(data['reviews.text'].fillna(""))
             predictions = rf_model.predict(X_new)
 
-            # Mapear las predicciones a etiquetas
             sentiment_mapping = {0: "Negative", 1: "Neutral", 2: "Positive"}
-            filtered_data['Predicted Sentiment'] = [sentiment_mapping[label] for label in predictions]
+            data['Predicted Sentiment'] = [sentiment_mapping[label] for label in predictions]
 
-            # Agrupar por categorías y calificaciones
+            # Resumir los resultados
+            sentiment_summary = (
+                data['Predicted Sentiment']
+                .value_counts()
+                .reset_index()
+                .rename(columns={'index': 'Sentiment', 'Predicted Sentiment': 'Count'})
+            )
+            st.write("### Summary of Sentiment Analysis")
+            st.table(sentiment_summary)
+
+            # Seleccionar Top-K categorías
+            K = st.slider("Select Top-K Categories to Analyze", min_value=1, max_value=20, value=10)
+            top_categories = data['categories'].value_counts().nlargest(K).index
+            filtered_data = data[data['categories'].isin(top_categories)]
+
+            # Agrupar reseñas por categoría y calificación
             grouped_reviews = (
-                filtered_data
-                .groupby(['categories', 'reviews.rating'])['reviews.text']
+                filtered_data.groupby(['categories', 'reviews.rating'])['reviews.text']
                 .apply(lambda x: " ".join(x))
                 .reset_index()
-                .rename(columns={'reviews.text': 'All Reviews'})
             )
 
             # Generar resúmenes
-            st.write("### Generating summaries...")
-            grouped_reviews['Summary'] = grouped_reviews['All Reviews'].apply(
-                lambda text: summarizer(text, max_length=100, min_length=30, truncation=True)[0]['summary_text']
-            )
+            st.write("### Generating Summaries for Each Category and Rating")
+
+            def summarize_reviews(text, max_length=512):
+                try:
+                    return summarizer(text, max_length=max_length, min_length=30, truncation=True)[0]['summary_text']
+                except Exception as e:
+                    return f"Error during summarization: {str(e)}"
+
+            grouped_reviews['Summary'] = grouped_reviews['reviews.text'].apply(summarize_reviews)
             st.success("Summaries generated successfully!")
 
-            # Visualización interactiva con Plotly
-            st.write("### Visualization Dashboard")
-            fig = px.sunburst(
-                grouped_reviews,
-                path=['categories', 'reviews.rating'],
-                values=None,
-                color='reviews.rating',
-                hover_data=['Summary'],
-                title="Summary by Categories and Ratings"
-            )
-            st.plotly_chart(fig, use_container_width=True)
+            # Mostrar tabla de resúmenes
+            st.write("### Summarized Reviews")
+            st.dataframe(grouped_reviews[['categories', 'reviews.rating', 'Summary']])
 
             # Descargar resultados
             output_file = "summarized_reviews.csv"
@@ -129,7 +114,8 @@ if uploaded_file:
                 file_name=output_file,
                 mime="text/csv"
             )
+
     except Exception as e:
         st.error(f"Error processing file: {e}")
 else:
-    st.info("Please upload a CSV file to proceed.")
+    st.info("Please upload your CSV file to proceed.")
