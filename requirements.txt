@@ -4,3 +4,5 @@ pandas
 joblib>=1.2.0
 matplotlib
 gdown
+transformers
+torch

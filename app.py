@@ -2,17 +2,18 @@ import streamlit as st
 import pandas as pd
 import joblib
 import gdown
+from transformers import pipeline
 
 # Configuración inicial de la página
-st.set_page_config(page_title="Sentiment Analysis with TF-IDF", layout="wide")
+st.set_page_config(page_title="Sentiment Analysis with Summarization", layout="wide")
 
-st.title("Customer Reviews Sentiment Analysis")
+st.title("Customer Reviews Sentiment Analysis and Summarization")
 
-# URL del archivo en Google Drive
+# URLs de los archivos en Google Drive
 MODEL_URL = "https://drive.google.com/uc?id=1JL0zT9kb3lwb9Rz_jwZgmg_znZWQ43oD"
-TFIDF_URL = "https://drive.google.com/uc?id=1_3xaYyWWaUVaQYrXCaA2POhfIIgFx62k"  # Reemplaza con el enlace de tu TF-IDF
+TFIDF_URL = "https://drive.google.com/uc?id=1_3xaYyWWaUVaQYrXCaA2POhfIIgFx62k"
 
-# Función para descargar y cargar el modelo
+# Función para descargar y cargar el modelo de análisis de sentimientos
 @st.cache_resource
 def load_model_and_vectorizer():
     # Descargar el modelo de Random Forest
@@ -27,12 +28,19 @@ def load_model_and_vectorizer():
 
     return rf_model, tfidf_vectorizer
 
-# Cargar el modelo y vectorizador
+# Función para cargar el modelo de resumen
+@st.cache_resource
+def load_summarization_model():
+    summarizer = pipeline("summarization", model="google/flan-t5-base")
+    return summarizer
+
+# Cargar modelos
 try:
     rf_model, tfidf = load_model_and_vectorizer()
-    st.success("Model and TF-IDF Vectorizer loaded successfully.")
+    summarizer = load_summarization_model()
+    st.success("Models loaded successfully!")
 except Exception as e:
-    st.error(f"Error loading model or vectorizer: {e}")
+    st.error(f"Error loading models: {e}")
     st.stop()
 
 # Carga del archivo CSV
@@ -42,7 +50,7 @@ if uploaded_file:
     try:
         # Leer el archivo CSV
         data = pd.read_csv(uploaded_file)
-        
+
         if 'reviews.text' not in data.columns:
             st.error("The CSV file must have a 'reviews.text' column for the reviews.")
         else:
@@ -66,15 +74,33 @@ if uploaded_file:
             st.write("### Summary of Sentiment Analysis")
             st.table(sentiment_summary)
 
+            # Agrupar las reseñas por sentimiento y resumirlas
+            st.write("### Summarizing Reviews by Sentiment")
+            grouped_reviews = (
+                data.groupby('Predicted Sentiment')['reviews.text']
+                .apply(lambda x: " ".join(x))
+                .reset_index()
+                .rename(columns={'reviews.text': 'All Reviews'})
+            )
+
+            grouped_reviews['Summary'] = grouped_reviews['All Reviews'].apply(
+                lambda x: summarizer(x, max_length=100, min_length=30, truncation=True)[0]['summary_text']
+            )
+
+            # Mostrar los resúmenes
+            st.write("### Review Summaries")
+            st.dataframe(grouped_reviews[['Predicted Sentiment', 'Summary']])
+
             # Descargar los resultados
-            csv = data.to_csv(index=False).encode("utf-8")
+            output_file = "summarized_reviews.csv"
+            grouped_reviews.to_csv(output_file, index=False)
             st.download_button(
-                label="Download Predictions as CSV",
-                data=csv,
-                file_name="predicted_reviews.csv",
+                label="Download Summarized Reviews as CSV",
+                data=open(output_file, "rb").read(),
+                file_name=output_file,
                 mime="text/csv"
             )
     except Exception as e:
         st.error(f"Error processing file: {e}")
 else:
-    st.info("Please upload your CSV file to proceed.")
+    st.info("Please upload a CSV file to proceed.")
