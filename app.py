@@ -29,7 +29,7 @@ def load_model_and_vectorizer():
 # Función para cargar el modelo de resumen desde un directorio
 @st.cache_resource
 def load_summarization_model():
-    summarizer_model_path = "flan_t5_summary_model"  # Ruta del directorio del modelo de resumen
+    summarizer_model_path = "./flan_t5_summary_model"  # Ruta del directorio del modelo de resumen
     tokenizer = AutoTokenizer.from_pretrained(summarizer_model_path)
     model = AutoModelForSeq2SeqLM.from_pretrained(summarizer_model_path)
     summarizer = pipeline("summarization", model=model, tokenizer=tokenizer)
