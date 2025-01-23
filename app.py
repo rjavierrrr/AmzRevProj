@@ -11,23 +11,31 @@ st.title("Customer Reviews Sentiment Analysis and Summarization")
 # URLs del modelo
 MODEL_URL = "https://drive.google.com/uc?id=1JL0zT9kb3lwb9Rz_jwZgmg_znZWQ43oD"
 TFIDF_URL = "https://drive.google.com/uc?id=1_3xaYyWWaUVaQYrXCaA2POhfIIgFx62k"
-SUMMARIZATION_MODEL_DIR = "/workspaces/AmzRevProj/flan_t5_summary_model"
 
 # Cargar el modelo de resumen
 @st.cache_resource
 def load_summarization_model():
     try:
-        tokenizer = T5Tokenizer.from_pretrained("google/flan-t5-base")
-        model = T5ForConditionalGeneration.from_pretrained("google/flan-t5-base")
+        # Load tokenizer and model from the local directory
+        tokenizer = T5Tokenizer.from_pretrained("/workspaces/AmzRevProj/flan_t5_summary_model")
+        model = T5ForConditionalGeneration.from_pretrained(
+            "/workspaces/AmzRevProj/flan_t5_summary_model", trust_remote_code=True
+        )
         return tokenizer, model
     except Exception as e:
         st.error(f"Error loading summarization model: {e}")
         st.stop()
 
-# Función para resumir reseñas
 def summarize_review(tokenizer, model, review_text):
     inputs = tokenizer.encode("summarize: " + review_text, return_tensors="pt", max_length=512, truncation=True)
-    summary_ids = model.generate(inputs, max_length=150, min_length=40, length_penalty=2.0, num_beams=4, early_stopping=True)
+    summary_ids = model.generate(
+        inputs,
+        max_length=150,
+        min_length=40,
+        length_penalty=2.0,
+        num_beams=4,
+        early_stopping=True,
+    )
     return tokenizer.decode(summary_ids[0], skip_special_tokens=True)
 
 # Descargar y cargar modelo y vectorizador
