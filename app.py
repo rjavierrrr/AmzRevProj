@@ -68,8 +68,8 @@ if uploaded_file:
     try:
         data = pd.read_csv(uploaded_file)
 
-        if 'reviews.text' not in data.columns or 'reviews.rating' not in data.columns or 'category' not in data.columns:
-            st.error("The CSV must have 'reviews.text', 'reviews.rating', and 'category' columns.")
+        if 'reviews.text' not in data.columns or 'reviews.rating' not in data.columns or 'categories' not in data.columns:
+            st.error("The CSV must have 'reviews.text', 'reviews.rating', and 'categories' columns.")
             st.stop()
 
         # Procesar y predecir sentimientos
@@ -81,25 +81,25 @@ if uploaded_file:
         data['Predicted Sentiment'] = [sentiment_mapping[label] for label in predictions]
 
         # Resumen por categorías y calificaciones
-        st.write("### Summarized Reviews by Category and Rating")
+        st.write("### Summarized Reviews by categories and Rating")
         top_k_categories = st.slider("Select number of categories to summarize", min_value=1, max_value=50, value=10)
-        category_summary = []
+        categories_summary = []
 
-        top_categories = data['category'].value_counts().head(top_k_categories).index
-        for category in top_categories:
-            st.write(f"#### Product Category: {category}")
-            category_data = data[data['category'] == category]
+        top_categories = data['categories'].value_counts().head(top_k_categories).index
+        for categories in top_categories:
+            st.write(f"#### Product categories: {categories}")
+            categories_data = data[data['categories'] == categories]
 
             for rating in range(1, 6):  # Rating 1 to 5
-                reviews = category_data[category_data['reviews.rating'] == rating]['reviews.text']
+                reviews = categories_data[categories_data['reviews.rating'] == rating]['reviews.text']
                 if not reviews.empty:
                     combined_text = " ".join(reviews)
                     summary = summarize_review(tokenizer, summarization_model, combined_text)
                     st.write(f"**Rating {rating} Summary:** {summary}")
-                    category_summary.append({"Category": category, "Rating": rating, "Summary": summary})
+                    categories_summary.append({"categories": categories, "Rating": rating, "Summary": summary})
 
         # Descargar resultados
-        summary_df = pd.DataFrame(category_summary)
+        summary_df = pd.DataFrame(categories_summary)
         csv = summary_df.to_csv(index=False).encode("utf-8")
         st.download_button(
             label="Download Summarization Results as CSV",
