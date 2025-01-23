@@ -68,8 +68,8 @@ if uploaded_file:
     try:
         data = pd.read_csv(uploaded_file)
 
-        if 'reviews.text' not in data.columns or 'reviews.rating' not in data.columns or 'product.category' not in data.columns:
-            st.error("The CSV must have 'reviews.text', 'reviews.rating', and 'product.category' columns.")
+        if 'reviews.text' not in data.columns or 'reviews.rating' not in data.columns or 'category' not in data.columns:
+            st.error("The CSV must have 'reviews.text', 'reviews.rating', and 'category' columns.")
             st.stop()
 
         # Procesar y predecir sentimientos
@@ -85,10 +85,10 @@ if uploaded_file:
         top_k_categories = st.slider("Select number of categories to summarize", min_value=1, max_value=50, value=10)
         category_summary = []
 
-        top_categories = data['product.category'].value_counts().head(top_k_categories).index
+        top_categories = data['category'].value_counts().head(top_k_categories).index
         for category in top_categories:
             st.write(f"#### Product Category: {category}")
-            category_data = data[data['product.category'] == category]
+            category_data = data[data['category'] == category]
 
             for rating in range(1, 6):  # Rating 1 to 5
                 reviews = category_data[category_data['reviews.rating'] == rating]['reviews.text']
