@@ -74,9 +74,8 @@ if uploaded_file:
             st.write("### Summary of Sentiment Analysis")
             st.table(sentiment_summary)
 
-            # Seleccionar Top-K categorías
-            K = st.slider("Select Top-K Categories to Analyze", min_value=1, max_value=20, value=10)
-            top_categories = data['categories'].value_counts().nlargest(K).index
+            # Seleccionar las 50 principales categorías
+            top_categories = data['categories'].value_counts().nlargest(50).index
             filtered_data = data[data['categories'].isin(top_categories)]
 
             # Agrupar reseñas por categoría y calificación
@@ -116,4 +115,3 @@ if uploaded_file:
         st.error(f"Error processing file: {e}")
 else:
     st.info("Please upload your CSV file to proceed.")
-
