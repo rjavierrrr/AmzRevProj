@@ -58,7 +58,8 @@ if uploaded_file:
         summaries = []
 
         with st.spinner("Summarizing reviews by category and rating..."):
-            for category in data['categories'].unique():
+            top_categories = data['categories'].value_counts().head(5).index
+            for category in top_categories:
                 category_data = data[data['categories'] == category]
                 for rating in range(1, 6):
                     rating_data = category_data[category_data['reviews.rating'] == rating]
@@ -71,7 +72,7 @@ if uploaded_file:
         summary_df = pd.DataFrame(summaries)
 
         # Mostrar resultados
-        st.write("### Summarized Reviews by Category and Rating")
+        st.write("### Summarized Reviews by Top 5 Categories and Rating")
         st.dataframe(summary_df)
 
         # Descargar resultados como CSV
@@ -79,7 +80,7 @@ if uploaded_file:
         st.download_button(
             label="Download Summarized Reviews as CSV",
             data=csv,
-            file_name="summarized_reviews_by_category_and_rating.csv",
+            file_name="summarized_reviews_by_top_5_categories_and_rating.csv",
             mime="text/csv"
         )
 
