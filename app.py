@@ -6,9 +6,9 @@ from transformers import pipeline
 import plotly.express as px
 
 # Configuración inicial de la página
-st.set_page_config(page_title="Sentiment Analysis and Summarization Dashboard", layout="wide")
+st.set_page_config(page_title="Sentiment Analysis and Summarization", layout="wide")
 
-st.title("Customer Reviews Sentiment Analysis and Summarization Dashboard")
+st.title("Customer Reviews Sentiment Analysis and Summarization")
 
 # URLs de los modelos en Google Drive
 MODEL_URL = "https://drive.google.com/uc?id=1JL0zT9kb3lwb9Rz_jwZgmg_znZWQ43oD"
@@ -17,12 +17,10 @@ TFIDF_URL = "https://drive.google.com/uc?id=1_3xaYyWWaUVaQYrXCaA2POhfIIgFx62k"
 # Función para descargar y cargar el modelo de análisis de sentimientos
 @st.cache_resource
 def load_model_and_vectorizer():
-    # Descargar el modelo de Random Forest
     model_output = "original_rf_model.pkl"
     gdown.download(MODEL_URL, model_output, quiet=False)
     rf_model = joblib.load(model_output)
 
-    # Descargar el vectorizador TF-IDF
     vectorizer_output = "tfidf_vectorizer.pkl"
     gdown.download(TFIDF_URL, vectorizer_output, quiet=False)
     tfidf_vectorizer = joblib.load(vectorizer_output)
@@ -35,7 +33,7 @@ def load_summarization_model():
     summarizer = pipeline("summarization", model="google/flan-t5-base")
     return summarizer
 
-# Cargar modelos
+# Cargar los modelos
 try:
     rf_model, tfidf = load_model_and_vectorizer()
     summarizer = load_summarization_model()
@@ -62,20 +60,34 @@ if uploaded_file:
             data = data[data['reviews.text'].str.strip() != ""]
             data['reviews.rating'] = data['reviews.rating'].astype(int)
 
-            # Seleccionar Top-K categorías
-            K = st.slider("Select number of top categories to analyze", min_value=1, max_value=20, value=10)
-            top_categories = data['categories'].value_counts().nlargest(K).index
-            filtered_data = data[data['categories'].isin(top_categories)]
+            # Opción para seleccionar el filtro (categorías o calificaciones)
+            filter_option = st.selectbox("Choose how to filter the reviews:", ["Categories", "Ratings"])
 
-            # Preprocesar reseñas y predecir sentimientos
+            if filter_option == "Categories":
+                # Dropdown para seleccionar categorías
+                unique_categories = data['categories'].value_counts().index.tolist()
+                selected_category = st.selectbox("Select a category to analyze:", unique_categories)
+
+                # Filtrar los datos por categoría seleccionada
+                filtered_data = data[data['categories'] == selected_category]
+            
+            elif filter_option == "Ratings":
+                # Dropdown para seleccionar calificaciones
+                unique_ratings = sorted(data['reviews.rating'].unique())
+                selected_rating = st.selectbox("Select a rating to analyze:", unique_ratings)
+
+                # Filtrar los datos por calificación seleccionada
+                filtered_data = data[data['reviews.rating'] == selected_rating]
+
+            # Preprocesar reseñas y realizar predicciones
             X_new = tfidf.transform(filtered_data['reviews.text'].fillna(""))
             predictions = rf_model.predict(X_new)
 
-            # Mapear predicciones a etiquetas
+            # Mapear las predicciones a etiquetas
             sentiment_mapping = {0: "Negative", 1: "Neutral", 2: "Positive"}
             filtered_data['Predicted Sentiment'] = [sentiment_mapping[label] for label in predictions]
 
-            # Agrupar por categoría y calificación
+            # Agrupar por categorías y calificaciones
             grouped_reviews = (
                 filtered_data
                 .groupby(['categories', 'reviews.rating'])['reviews.text']
@@ -112,7 +124,6 @@ if uploaded_file:
                 file_name=output_file,
                 mime="text/csv"
             )
-
     except Exception as e:
         st.error(f"Error processing file: {e}")
 else:
