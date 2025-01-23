@@ -4,6 +4,7 @@ import joblib
 import gdown
 import zipfile
 from transformers import T5Tokenizer, T5ForConditionalGeneration
+from concurrent.futures import ThreadPoolExecutor
 
 # Configuración inicial de la página
 st.set_page_config(page_title="Sentiment Analysis & Summarization", layout="wide")
@@ -43,12 +44,12 @@ def load_summarization_model():
     return tokenizer, model
 
 # Función para resumir reseñas
-def summarize_review(tokenizer, model, review_text):
+def summarize_review(tokenizer, model, review_text, max_length=150, min_length=40):
     inputs = tokenizer.encode("summarize: " + review_text, return_tensors="pt", max_length=512, truncation=True)
     summary_ids = model.generate(
         inputs,
-        max_length=150,
-        min_length=40,
+        max_length=max_length,
+        min_length=min_length,
         length_penalty=2.0,
         num_beams=4,
         early_stopping=True,
@@ -75,28 +76,44 @@ if uploaded_file:
         # Procesar y predecir sentimientos
         data['reviews.text'] = data['reviews.text'].fillna("")
         X_new = tfidf.transform(data['reviews.text'])
-        predictions = rf_model.predict(X_new)
+
+        with st.spinner("Predicting sentiments..."):
+            predictions = rf_model.predict(X_new)
 
         sentiment_mapping = {0: "Negative", 1: "Neutral", 2: "Positive"}
         data['Predicted Sentiment'] = [sentiment_mapping[label] for label in predictions]
 
+        # Visualización de distribución de sentimientos
+        st.write("### Sentiment Distribution")
+        sentiment_counts = data['Predicted Sentiment'].value_counts()
+        st.bar_chart(sentiment_counts)
+
         # Resumen por categorías y calificaciones
-        st.write("### Summarized Reviews by categories and Rating")
+        st.write("### Summarized Reviews by Categories and Rating")
         top_k_categories = st.slider("Select number of categories to summarize", min_value=1, max_value=50, value=10)
         categories_summary = []
 
         top_categories = data['categories'].value_counts().head(top_k_categories).index
-        for categories in top_categories:
-            st.write(f"#### Product categories: {categories}")
-            categories_data = data[data['categories'] == categories]
+
+        def process_category_summary(category):
+            category_summary = []
+            categories_data = data[data['categories'] == category]
 
             for rating in range(1, 6):  # Rating 1 to 5
                 reviews = categories_data[categories_data['reviews.rating'] == rating]['reviews.text']
                 if not reviews.empty:
                     combined_text = " ".join(reviews)
                     summary = summarize_review(tokenizer, summarization_model, combined_text)
-                    st.write(f"**Rating {rating} Summary:** {summary}")
-                    categories_summary.append({"categories": categories, "Rating": rating, "Summary": summary})
+                    category_summary.append({"categories": category, "Rating": rating, "Summary": summary})
+                    st.write(f"**Category:** {category} | **Rating {rating} Summary:** {summary}")
+            return category_summary
+
+        # Procesamiento paralelo para mejorar la velocidad
+        with ThreadPoolExecutor() as executor:
+            results = list(executor.map(process_category_summary, top_categories))
+
+        for result in results:
+            categories_summary.extend(result)
 
         # Descargar resultados
         summary_df = pd.DataFrame(categories_summary)
@@ -107,6 +124,7 @@ if uploaded_file:
             file_name="summarized_reviews.csv",
             mime="text/csv"
         )
+
     except Exception as e:
         st.error(f"Error processing file: {e}")
 else:
