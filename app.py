@@ -57,8 +57,8 @@ if uploaded_file:
         unique_categories = data['categories'].unique()
         unique_ratings = [1, 2, 3, 4, 5]
 
-        selected_categories = st.multiselect("Select Categories to Summarize", options=unique_categories, default=unique_categories[:5])
-        selected_ratings = st.multiselect("Select Ratings to Include", options=unique_ratings, default=unique_ratings)
+        selected_categories = st.multiselect("Select Categories to Summarize", options=unique_categories, default=[])
+        selected_ratings = st.multiselect("Select Ratings to Include", options=unique_ratings, default=[])
 
         if not selected_categories or not selected_ratings:
             st.warning("Please select at least one category and one rating.")
