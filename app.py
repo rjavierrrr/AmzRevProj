@@ -62,7 +62,7 @@ if uploaded_file:
             for category in top_categories:
                 category_data = data[data['categories'] == category]
                 for rating in range(1, 6):
-                    rating_data = category_data[category_data['reviews.rating'] == rating]
+                    rating_data = category_data[category_data['reviews.rating'] == rating].head(10)  # Limitar a 10 reseñas
                     if not rating_data.empty:
                         combined_text = " ".join(rating_data['reviews.text'])
                         summary = summarize_text(tokenizer, summarization_model, combined_text)
