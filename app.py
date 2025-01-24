@@ -3,6 +3,7 @@ import pandas as pd
 import gdown
 import zipfile
 from transformers import T5Tokenizer, T5ForConditionalGeneration
+import joblib
 
 # Configuración inicial de la página
 st.set_page_config(page_title="Category and Rating Summarization", layout="wide")
@@ -10,8 +11,10 @@ st.title("Summarize Reviews by Category and Rating")
 
 # URL del modelo de resumen en Google Drive
 SUMMARIZATION_ZIP_URL = "https://drive.google.com/uc?id=1OlArb8SDWtSMdOvfMgEB1_a_6Z06I6fG"  # Reemplaza con el ID del archivo ZIP
+MODEL_URL = "https://drive.google.com/uc?id=1JL0zT9kb3lwb9Rz_jwZgmg_znZWQ43oD"
+TFIDF_URL = "https://drive.google.com/uc?id=1_3xaYyWWaUVaQYrXCaA2POhfIIgFx62k"
 
-# Descargar y cargar modelo de resumen
+# Descargar y cargar modelos
 @st.cache_resource
 def load_summarization_model():
     # Descargar y descomprimir el modelo de resumen
@@ -24,23 +27,25 @@ def load_summarization_model():
     model = T5ForConditionalGeneration.from_pretrained("./flan_t5_summary_model/flan_t5_summary_model")
     return tokenizer, model
 
-# Función para resumir texto
-def summarize_text(tokenizer, model, input_text, max_length=150, min_length=40):
-    inputs = tokenizer.encode("summarize: " + input_text, return_tensors="pt", max_length=512, truncation=True)
-    summary_ids = model.generate(
-        inputs,
-        max_length=max_length,
-        min_length=min_length,
-        length_penalty=2.0,
-        num_beams=4,
-        early_stopping=True,
-    )
-    return tokenizer.decode(summary_ids[0], skip_special_tokens=True)
+@st.cache_resource
+def load_sentiment_model_and_vectorizer():
+    # Descargar el modelo de Random Forest
+    model_output = "original_rf_model.pkl"
+    gdown.download(MODEL_URL, model_output, quiet=False)
+    rf_model = joblib.load(model_output)
 
-# Cargar el modelo de resumen
+    # Descargar el vectorizador TF-IDF
+    vectorizer_output = "tfidf_vectorizer.pkl"
+    gdown.download(TFIDF_URL, vectorizer_output, quiet=False)
+    tfidf_vectorizer = joblib.load(vectorizer_output)
+
+    return rf_model, tfidf_vectorizer
+
+# Cargar los modelos
+rf_model, tfidf = load_sentiment_model_and_vectorizer()
 tokenizer, summarization_model = load_summarization_model()
 
-st.success("Model loaded successfully.")
+st.success("Models loaded successfully.")
 
 # Carga del archivo CSV
 uploaded_file = st.file_uploader("Upload a CSV file with 'reviews.text', 'categories', and 'reviews.rating' columns", type=["csv"])
@@ -52,6 +57,34 @@ if uploaded_file:
         if not all(col in data.columns for col in ['reviews.text', 'categories', 'reviews.rating']):
             st.error("The CSV must have 'reviews.text', 'categories', and 'reviews.rating' columns.")
             st.stop()
+
+        # Análisis de sentimientos
+        if 'reviews.text' in data.columns:
+            X_new = tfidf.transform(data['reviews.text'].fillna(""))
+            predictions = rf_model.predict(X_new)
+
+            sentiment_mapping = {0: "Negative", 1: "Neutral", 2: "Positive"}
+            data['Predicted Sentiment'] = [sentiment_mapping[label] for label in predictions]
+
+            # Resumir los resultados de sentimiento
+            sentiment_summary = (
+                data['Predicted Sentiment']
+                .value_counts()
+                .reset_index()
+                .rename(columns={'index': 'Sentiment', 'Predicted Sentiment': 'Count'})
+            )
+
+            st.write("### Summary of Sentiment Analysis")
+            st.table(sentiment_summary)
+
+            # Descargar los resultados
+            sentiment_csv = data.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                label="Download Sentiment Analysis Results as CSV",
+                data=sentiment_csv,
+                file_name="sentiment_analysis_results.csv",
+                mime="text/csv"
+            )
 
         # Selección de cantidad de categorías y calificaciones
         unique_categories = data['categories'].unique()
