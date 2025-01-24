@@ -53,16 +53,26 @@ if uploaded_file:
             st.error("The CSV must have 'reviews.text', 'categories', and 'reviews.rating' columns.")
             st.stop()
 
+        # Selección de cantidad de categorías y calificaciones
+        unique_categories = data['categories'].unique()
+        unique_ratings = [1, 2, 3, 4, 5]
+
+        selected_categories = st.multiselect("Select Categories to Summarize", options=unique_categories, default=unique_categories[:5])
+        selected_ratings = st.multiselect("Select Ratings to Include", options=unique_ratings, default=unique_ratings)
+
+        if not selected_categories or not selected_ratings:
+            st.warning("Please select at least one category and one rating.")
+            st.stop()
+
         # Procesar y resumir por categoría y calificación
         data['reviews.text'] = data['reviews.text'].fillna("")
         summaries = []
 
         with st.spinner("Summarizing reviews by category and rating..."):
-            top_categories = data['categories'].value_counts().head(5).index
-            for category in top_categories:
+            for category in selected_categories:
                 category_data = data[data['categories'] == category]
-                for rating in range(1, 6):
-                    rating_data = category_data[category_data['reviews.rating'] == rating].head(10)  # Limitar a 10 reseñas
+                for rating in selected_ratings:
+                    rating_data = category_data[category_data['reviews.rating'] == rating].head(5)  # Limitar a 10 reseñas
                     if not rating_data.empty:
                         combined_text = " ".join(rating_data['reviews.text'])
                         summary = summarize_text(tokenizer, summarization_model, combined_text)
@@ -72,7 +82,7 @@ if uploaded_file:
         summary_df = pd.DataFrame(summaries)
 
         # Mostrar resultados
-        st.write("### Summarized Reviews by Top 5 Categories and Rating")
+        st.write("### Summarized Reviews by Selected Categories and Ratings")
         st.dataframe(summary_df)
 
         # Descargar resultados como CSV
@@ -80,7 +90,7 @@ if uploaded_file:
         st.download_button(
             label="Download Summarized Reviews as CSV",
             data=csv,
-            file_name="summarized_reviews_by_top_5_categories_and_rating.csv",
+            file_name="summarized_reviews_by_selected_categories_and_ratings.csv",
             mime="text/csv"
         )
 
