@@ -46,6 +46,18 @@ rf_model, tfidf = load_sentiment_model_and_vectorizer()
 tokenizer, summarization_model = load_summarization_model()
 
 st.success("Models loaded successfully.")
+# Función para resumir texto
+def summarize_text(tokenizer, model, input_text, max_length=150, min_length=40):
+    inputs = tokenizer.encode("summarize: " + input_text, return_tensors="pt", max_length=512, truncation=True)
+    summary_ids = model.generate(
+        inputs,
+        max_length=max_length,
+        min_length=min_length,
+        length_penalty=2.0,
+        num_beams=4,
+        early_stopping=True,
+    )
+    return tokenizer.decode(summary_ids[0], skip_special_tokens=True)
 
 # Carga del archivo CSV
 uploaded_file = st.file_uploader("Upload a CSV file with 'reviews.text', 'categories', and 'reviews.rating' columns", type=["csv"])
